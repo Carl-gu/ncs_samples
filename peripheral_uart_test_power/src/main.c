@@ -32,6 +32,7 @@
 #include <stdio.h>
 
 #include <zephyr/logging/log.h>
+#include <zephyr/pm/device.h>
 
 #define LOG_MODULE_NAME peripheral_uart
 LOG_MODULE_REGISTER(LOG_MODULE_NAME);
@@ -58,6 +59,7 @@ static K_SEM_DEFINE(ble_init_ok, 0, 1);
 
 static struct bt_conn *current_conn;
 static struct bt_conn *auth_conn;
+static bool uart_active = false;
 
 static const struct device *uart = DEVICE_DT_GET(DT_CHOSEN(nordic_nus_uart));
 static struct k_work_delayable uart_work;
@@ -85,6 +87,35 @@ UART_ASYNC_ADAPTER_INST_DEFINE(async_adapter);
 #else
 static const struct device *const async_adapter;
 #endif
+
+
+static void uart_enable(void)
+{
+	uart_active = true;
+	struct uart_data_t *buf;
+
+	pm_device_action_run(uart,PM_DEVICE_ACTION_RESUME);
+	buf = k_malloc(sizeof(*buf));
+	if (buf)
+	{
+		buf->len = 0;
+	}
+	else
+	{
+		LOG_WRN("Not able to allocate UART receive buffer");
+		k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
+		return;
+	}
+
+	uart_rx_enable(uart, buf->data, sizeof(buf->data), UART_WAIT_FOR_RX);
+}
+
+static void uart_disable(void)
+{
+	uart_active = false;
+	uart_rx_disable(uart);
+	pm_device_action_run(uart,PM_DEVICE_ACTION_SUSPEND);
+}
 
 static void uart_cb(const struct device *dev, struct uart_event *evt, void *user_data)
 {
@@ -147,18 +178,20 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 		LOG_DBG("UART_RX_DISABLED");
 		disable_req = false;
 
-		buf = k_malloc(sizeof(*buf));
-		if (buf) {
-			buf->len = 0;
-		} else {
-			LOG_WRN("Not able to allocate UART receive buffer");
-			k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
-			return;
+		if(uart_active)
+		{
+			buf = k_malloc(sizeof(*buf));
+			if (buf) {
+				buf->len = 0;
+			} else {
+				LOG_WRN("Not able to allocate UART receive buffer");
+				k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
+				return;
+			}
+
+			uart_rx_enable(uart, buf->data, sizeof(buf->data),
+					UART_WAIT_FOR_RX);
 		}
-
-		uart_rx_enable(uart, buf->data, sizeof(buf->data),
-			       UART_WAIT_FOR_RX);
-
 		break;
 
 	case UART_RX_BUF_REQUEST:
@@ -210,16 +243,19 @@ static void uart_work_handler(struct k_work *item)
 {
 	struct uart_data_t *buf;
 
-	buf = k_malloc(sizeof(*buf));
-	if (buf) {
-		buf->len = 0;
-	} else {
-		LOG_WRN("Not able to allocate UART receive buffer");
-		k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
-		return;
-	}
+	if(uart_active)
+	{
+		buf = k_malloc(sizeof(*buf));
+		if (buf) {
+			buf->len = 0;
+		} else {
+			LOG_WRN("Not able to allocate UART receive buffer");
+			k_work_reschedule(&uart_work, UART_WAIT_FOR_BUF_DELAY);
+			return;
+		}
 
-	uart_rx_enable(uart, buf->data, sizeof(buf->data), UART_WAIT_FOR_RX);
+		uart_rx_enable(uart, buf->data, sizeof(buf->data), UART_WAIT_FOR_RX);
+	}
 }
 
 static bool uart_test_async_api(const struct device *dev)
@@ -317,7 +353,8 @@ static int uart_init(void)
 		return err;
 	}
 
-	return uart_rx_enable(uart, rx->data, sizeof(rx->data), 50);
+	// return uart_rx_enable(uart, rx->data, sizeof(rx->data), 50);
+	return err;
 }
 
 static void connected(struct bt_conn *conn, uint8_t err)
@@ -335,6 +372,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	current_conn = bt_conn_ref(conn);
 
 	dk_set_led_on(CON_STATUS_LED);
+	uart_enable();
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
@@ -354,6 +392,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 		bt_conn_unref(current_conn);
 		current_conn = NULL;
 		dk_set_led_off(CON_STATUS_LED);
+		uart_disable();
 	}
 }
 
@@ -602,7 +641,9 @@ void main(void)
 		return;
 	}
 
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd,
+	err = bt_le_adv_start(BT_LE_ADV_PARAM(BT_LE_ADV_OPT_CONNECTABLE, \
+				       0x00a0*20, \
+				       0x00f0*20, NULL), ad, ARRAY_SIZE(ad), sd,
 			      ARRAY_SIZE(sd));
 	if (err) {
 		LOG_ERR("Advertising failed to start (err %d)", err);

@@ -86,6 +86,373 @@ UART_ASYNC_ADAPTER_INST_DEFINE(async_adapter);
 static const struct device *const async_adapter;
 #endif
 
+
+
+/*************************************DFUMaster***************************************/
+
+#define MTU_SIZE 129
+#define MAX_ACTUAL_PAYLOAD (MTU_SIZE/2-2)
+#define MAX_OBJECT_SIZE MTU_SIZE
+uint8_t uart_tx_done = false;
+uint32_t find_image_size(uint32_t start_address, uint32_t end_address);
+void Master_start_DFU(void);
+// /** @brief Function for main application entry.
+//  */
+//  static serial_dfu_t m_dfu;
+//  static void uart_event_handler(nrf_drv_uart_event_t * p_event, void * p_context)
+// {
+//     uint32_t err_code;
+//     switch (p_event->type)
+//     {
+//         case NRF_DRV_UART_EVT_TX_DONE:
+    
+//             break;
+
+//         case NRF_DRV_UART_EVT_RX_DONE:
+//             //Todo: instead of using delay response code checking should be done here.
+//             err_code = nrf_drv_uart_rx(&m_dfu.uart_instance, &m_dfu.uart_buffer, 100);
+//             if (err_code != NRF_SUCCESS)
+//             {
+//                 NRF_LOG_ERROR("Failed initializing rx");
+//             }
+//             break;
+
+//         case NRF_DRV_UART_EVT_ERROR:
+    
+//             break;
+//     }
+// }
+
+// Simple algorithm for finding the end of the firmware image in the flash
+// Assumes that there is nothing stored in the flash after the image, otherwise it will fail
+#define SLIP_BYTE_END             0300    /* indicates end of packet */
+#define SLIP_BYTE_ESC             0333    /* indicates byte stuffing */
+#define SLIP_BYTE_ESC_END         0334    /* ESC ESC_END means END data byte */
+#define SLIP_BYTE_ESC_ESC         0335    /* ESC ESC_ESC means ESC data byte */
+
+
+void slip_encode(uint8_t * p_output,  uint8_t * p_input, uint32_t input_length, uint32_t * p_output_buffer_length)
+{
+    if (p_output == NULL || p_input == NULL || p_output_buffer_length == NULL)
+    {
+        return ;
+    }
+
+    *p_output_buffer_length = 0;
+    uint32_t input_index;
+
+    for (input_index = 0; input_index < input_length; input_index++)
+    {
+        switch (p_input[input_index])
+        {
+            case SLIP_BYTE_END:
+                p_output[(*p_output_buffer_length)++] = SLIP_BYTE_ESC;
+                p_output[(*p_output_buffer_length)++] = SLIP_BYTE_ESC_END;
+                break;
+
+            case SLIP_BYTE_ESC:
+                p_output[(*p_output_buffer_length)++] = SLIP_BYTE_ESC;
+                p_output[(*p_output_buffer_length)++] = SLIP_BYTE_ESC_ESC;
+                break;
+
+            default:
+                p_output[(*p_output_buffer_length)++] = p_input[input_index];
+        }
+    }
+    p_output[(*p_output_buffer_length)++] = SLIP_BYTE_END;
+
+    return ;
+}
+
+uint32_t find_image_size(uint32_t start_address, uint32_t end_address)
+{
+    uint32_t img_size = end_address - 1;
+    while(img_size > start_address)
+    {
+        if(*((uint8_t*)img_size) != 0xFF) break;
+        img_size -= 1;
+    }
+    img_size = img_size + 1 - start_address;   
+    
+    return img_size;    
+}
+
+static uint8_t encoded_slip_packet[ MTU_SIZE ] = {0};
+static uint8_t payload[ MAX_ACTUAL_PAYLOAD ] = {0};
+static void uart_encode_and_send(uint8_t *data, uint32_t length)
+{    
+	int err;
+	uint32_t encoded_slip_packet_length;
+    (void)slip_encode(encoded_slip_packet, data, length, &encoded_slip_packet_length);
+
+	uart_tx_done=false;
+	uart_tx(uart, data, length, SYS_FOREVER_MS);
+	while(uart_tx_done==false){k_sleep(K_MSEC(10));}
+
+	// for (uint16_t pos = 0; pos != length;) {
+	// 	struct uart_data_t *tx = k_malloc(sizeof(*tx));
+
+	// 	if (!tx) {
+	// 		LOG_WRN("Not able to allocate UART send data buffer");
+	// 		return;
+	// 	}
+
+	// 	/* Keep the last byte of TX buffer for potential LF char. */
+	// 	size_t tx_data_size = sizeof(tx->data) - 1;
+
+	// 	if ((length - pos) > tx_data_size) {
+	// 		tx->len = tx_data_size;
+	// 	} else {
+	// 		tx->len = (length - pos);
+	// 	}
+
+	// 	memcpy(tx->data, &encoded_slip_packet[pos], tx->len);
+
+	// 	pos += tx->len;
+
+	// 	/* Append the LF character when the CR character triggered
+	// 	 * transmission from the peer.
+	// 	 */
+	// 	// if ((pos == length) && (data[length - 1] == '\r')) {
+	// 	// 	tx->data[tx->len] = '\n';
+	// 	// 	tx->len++;
+	// 	// }
+
+	// 	err = uart_tx(uart, tx->data, tx->len, SYS_FOREVER_MS);
+	// 	if (err) {
+	// 		k_fifo_put(&fifo_uart_tx_data, tx);
+	// 	}
+	// }
+}
+    
+static void uart_send_init_packet(uint8_t *init_data, uint32_t length)
+{
+	int err;
+    uint32_t encoded_slip_packet_length;
+	LOG_INF("uart_send_init_packet length = %d", length);
+    //Create Object
+    payload[0]=0x01;
+    payload[1]=0x01;//Command Object
+    payload[2]=length;
+    payload[3]=length>>8;
+    payload[4]=length>>16;
+    payload[5]=length>>24;
+    uart_encode_and_send(payload,6);
+	k_sleep(K_MSEC(5));
+
+	uart_tx_done=false;
+	uart_tx(uart, init_data, length, SYS_FOREVER_MS);
+	while(uart_tx_done==false){k_sleep(K_MSEC(10));}
+    // while(length>0)
+    // {   
+    //     encoded_slip_packet[0]=0x08;//Write object opcode
+
+	// 	struct uart_data_t *tx = k_malloc(sizeof(*tx));
+
+    //     if (length>=MAX_ACTUAL_PAYLOAD)
+    //     {
+    //         (void)slip_encode(&encoded_slip_packet[1], init_data, MAX_ACTUAL_PAYLOAD, &encoded_slip_packet_length);
+    //         length= length-MAX_ACTUAL_PAYLOAD;
+    //         init_data = init_data+MAX_ACTUAL_PAYLOAD;
+	// 		tx->len = MAX_ACTUAL_PAYLOAD+1;
+    //     }else
+    //     {
+    //         (void)slip_encode(&encoded_slip_packet[1], init_data, length, &encoded_slip_packet_length);
+	// 		tx->len = length+1;
+    //         length=0;
+    //     }
+    //     // LOG_INF("Data : %d %d %d", length,&init_data,MAX_ACTUAL_PAYLOAD);
+    //     // send
+	// 	// for (uint16_t pos = 0; pos != length;) {
+	// 		if (!tx) {
+	// 			LOG_WRN("Not able to allocate UART send data buffer");
+	// 			return;
+	// 		}
+
+	// 		/* Keep the last byte of TX buffer for potential LF char. */
+	// 		// size_t tx_data_size = sizeof(tx->data) - 1;
+
+	// 		// if ((length - pos) > tx_data_size) {
+	// 		// 	tx->len = tx_data_size;
+	// 		// } else {
+	// 		// 	tx->len = (length - pos);
+	// 		// }
+
+	// 		memmove(tx->data, &encoded_slip_packet[0], tx->len);
+
+	// 		// pos += tx->len;
+
+	// 		/* Append the LF character when the CR character triggered
+	// 		* transmission from the peer.
+	// 		*/
+	// 		// if ((pos == length) && (init_data[length - 1] == '\r')) {
+	// 		// 	tx->data[tx->len] = '\n';
+	// 		// 	tx->len++;
+	// 		// }
+
+	// 		err = uart_tx(uart, tx->data, tx->len, SYS_FOREVER_MS);
+	// 		if (err) {
+	// 			k_fifo_put(&fifo_uart_tx_data, tx);
+	// 		}
+	// 	// }    
+    // }
+    //Ask for CRC
+     payload[0]=0x03;
+     uart_encode_and_send(payload,1);
+	k_sleep(K_MSEC(5));
+
+    //To-DO: check CRC
+    //Execute init packet
+     payload[0]=0x04;
+     uart_encode_and_send(payload,1);
+    
+}
+
+static void uart_send_application_image(uint8_t *data, uint32_t length)
+{
+	int err;
+    uint32_t encoded_slip_packet_length;
+
+    //Create Object
+    payload[0]=0x01;
+    payload[1]=0x02;//Command Object
+    payload[2]=length;
+    payload[3]=length>>8;
+    payload[4]=length>>16;
+    payload[5]=length>>24;
+    uart_encode_and_send(payload,6);
+	k_sleep(K_MSEC(5));
+
+
+
+	uart_tx_done=false;
+	uart_tx(uart, data, length, SYS_FOREVER_MS);
+	while(uart_tx_done==false){k_sleep(K_MSEC(10));}
+    // while(length>0)
+    // {   
+    //     encoded_slip_packet[0]=0x08;//Write object opcode
+
+	// 	struct uart_data_t *tx = k_malloc(sizeof(*tx));
+
+    //     if (length>=MAX_ACTUAL_PAYLOAD)
+    //     {
+    //         (void)slip_encode(&encoded_slip_packet[1], data, MAX_ACTUAL_PAYLOAD, &encoded_slip_packet_length);
+    //         length= length-MAX_ACTUAL_PAYLOAD;
+    //         data = data+MAX_ACTUAL_PAYLOAD;
+	// 		tx->len = MAX_ACTUAL_PAYLOAD+1;
+    //     }else
+    //     {
+    //         (void)slip_encode(&encoded_slip_packet[1], data, length, &encoded_slip_packet_length);
+	// 		tx->len = length+1;
+    //         length=0;
+    //     }
+    //     // LOG_INF("Data : %d %d %d", length,&data,MAX_ACTUAL_PAYLOAD);
+    //     // send
+	// 	// for (uint16_t pos = 0; pos != length;) {
+	// 	// 	struct uart_data_t *tx = k_malloc(sizeof(*tx));
+
+	// 		if (!tx) {
+	// 			LOG_WRN("Not able to allocate UART send data buffer");
+	// 			return;
+	// 		}
+
+	// 	// 	/* Keep the last byte of TX buffer for potential LF char. */
+	// 	// 	size_t tx_data_size = sizeof(tx->data) - 1;
+
+	// 	// 	if ((length - pos) > tx_data_size) {
+	// 	// 		tx->len = tx_data_size;
+	// 	// 	} else {
+	// 	// 		tx->len = (length - pos);
+	// 	// 	}
+
+	// 		memmove(tx->data, &encoded_slip_packet[0], tx->len);
+
+	// 		// pos += tx->len;
+
+	// 		/* Append the LF character when the CR character triggered
+	// 		* transmission from the peer.
+	// 		*/
+	// 		// if ((pos == length) && (data[length - 1] == '\r')) {
+	// 		// 	tx->data[tx->len] = '\n';
+	// 		// 	tx->len++;
+	// 		// }
+
+	// 		err = uart_tx(uart, tx->data, tx->len, SYS_FOREVER_MS);
+	// 		if (err) {
+	// 			k_fifo_put(&fifo_uart_tx_data, tx);
+	// 		}
+	// 		else{
+	// 			k_free(tx);
+	// 		}
+	// 	// }    
+        
+    // }
+    //Ask for CRC
+     payload[0]=0x03;
+     uart_encode_and_send(payload,1);
+	k_sleep(K_MSEC(5));
+
+    //To-DO: check CRC
+    //Execute init packet
+     payload[0]=0x04;
+     uart_encode_and_send(payload,1);
+	k_sleep(K_MSEC(15));
+
+}
+
+
+static void uart_send_ping_packet()
+{
+    uint32_t encoded_slip_packet_length;
+    uint8_t init_data[4]={0x09,0x01};
+    uint32_t length= 2;
+    (void)slip_encode(encoded_slip_packet, init_data, length, &encoded_slip_packet_length);
+    // send
+    uart_tx(uart, encoded_slip_packet, encoded_slip_packet_length, SYS_FOREVER_MS);
+}
+
+
+void Master_start_DFU(void)
+{
+    uint32_t data_size;
+    uint32_t application_image_address = 0x41000;
+	uint32_t init_image_address = 0x40000;
+    dk_set_led_off(DK_LED4);
+    data_size = find_image_size(init_image_address,init_image_address+0x500);
+    LOG_INF("Init data size: %d", data_size);
+    uint8_t *data;
+    data= (uint8_t *) init_image_address;
+    LOG_INF("Data : %x %x %d", *data, *(data+1),MAX_ACTUAL_PAYLOAD);
+	k_sleep(K_MSEC(5));
+    uart_send_init_packet((uint8_t *) init_image_address,data_size);
+	k_sleep(K_MSEC(500));
+
+    
+    data_size = find_image_size(application_image_address,application_image_address+0x30000);
+    LOG_INF("Image size: %d", data_size);
+    //Max object size is 4096 bytes.
+    while(data_size>0)
+    {   
+        if ( data_size>=MAX_OBJECT_SIZE)
+        {
+            
+            uart_send_application_image((uint8_t *) application_image_address,MAX_OBJECT_SIZE);
+            data_size = data_size- MAX_OBJECT_SIZE;
+            application_image_address= application_image_address + MAX_OBJECT_SIZE;
+        }else
+        {
+             uart_send_application_image((uint8_t *) application_image_address,data_size);
+             data_size = 0;
+        }
+    }  
+        
+
+    dk_set_led_on(DK_LED4);
+}
+
+/*************************************END DFUMaster***************************************/
+
+
 static void uart_cb(const struct device *dev, struct uart_event *evt, void *user_data)
 {
 	ARG_UNUSED(dev);
@@ -98,31 +465,33 @@ static void uart_cb(const struct device *dev, struct uart_event *evt, void *user
 	switch (evt->type) {
 	case UART_TX_DONE:
 		LOG_DBG("UART_TX_DONE");
-		if ((evt->data.tx.len == 0) ||
-		    (!evt->data.tx.buf)) {
-			return;
-		}
+		uart_tx_done = true;
+		// if ((evt->data.tx.len == 0) ||
+		//     (!evt->data.tx.buf)) {
+		// 	return;
+		// }
 
-		if (aborted_buf) {
-			buf = CONTAINER_OF(aborted_buf, struct uart_data_t,
-					   data);
-			aborted_buf = NULL;
-			aborted_len = 0;
-		} else {
-			buf = CONTAINER_OF(evt->data.tx.buf, struct uart_data_t,
-					   data);
-		}
+		// if (aborted_buf) {
+		// 	buf = CONTAINER_OF(aborted_buf, struct uart_data_t,
+		// 			   data);
+		// 	aborted_buf = NULL;
+		// 	aborted_len = 0;
+		// } else {
+		// 	buf = CONTAINER_OF(evt->data.tx.buf, struct uart_data_t,
+		// 			   data);
+		// }
 
-		k_free(buf);
+		// k_free(buf);
 
-		buf = k_fifo_get(&fifo_uart_tx_data, K_NO_WAIT);
-		if (!buf) {
-			return;
-		}
+		// buf = k_fifo_get(&fifo_uart_tx_data, K_NO_WAIT);
+		// if (!buf) {
+		// 	return;
+		// }
+		// LOG_DBG("UART_TX_DONE len=%d", buf->len);
 
-		if (uart_tx(uart, buf->data, buf->len, SYS_FOREVER_MS)) {
-			LOG_WRN("Failed to send data over UART");
-		}
+		// if (uart_tx(uart, buf->data, buf->len, SYS_FOREVER_MS)) {
+		// 	LOG_WRN("Failed to send data over UART");
+		// }
 
 		break;
 
@@ -536,6 +905,11 @@ void button_changed(uint32_t button_state, uint32_t has_changed)
 		if (buttons & KEY_PASSKEY_REJECT) {
 			num_comp_reply(false);
 		}
+	}
+
+	if(buttons & DK_BTN4_MSK)
+	{
+		Master_start_DFU();
 	}
 }
 #endif /* CONFIG_BT_NUS_SECURITY_ENABLED */

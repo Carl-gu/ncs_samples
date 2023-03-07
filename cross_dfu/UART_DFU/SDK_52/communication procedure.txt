@@ -1,0 +1,5 @@
+APP--->BLE---->52---->UART----->52     HEX: 59 01 00 21 73 03    request flash information
+               52<----UART<-----52     HEX: 51 0D 00 21 00 00 88 00 00 00 00 00 00 00 88 00 4E 46
+APP--->BLE---->52---->UART----->52     HEX: 59 09 00 24 00 00 00 00 16 00 00 00 EA 7D       request to erase flash
+			   52<----UART<-----52     HEX: 51 03 00 24 6F 6B 0D 72 
+APP--->BLE---->52---->UART----->52     HEX: transfer blocks of image

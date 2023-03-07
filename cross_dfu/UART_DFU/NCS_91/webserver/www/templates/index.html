@@ -1,0 +1,29 @@
+<!doctype html>
+<title>Cross DFU</title>
+
+<h2>Cross DFU for nRF91 + nRF52</h2>
+
+
+<h3>Test bin file list</h3>
+
+<p>
+  <a href="dfu_file_52">dfu_file_52.bin</a>
+</p>
+<p>
+After DFU of this file, 52832 DK will work as BLE HRM peripheral.
+</p>
+
+<p>
+  <a href="dfu_file_91">dfu_file_91.bin</a>
+</p>
+<p>
+After DFU of this file, 9160 DK will turn on LED 3 and LED 4 on power on.
+</p>
+
+<h3>Upload a bin file</h3>
+
+<input type="button" value="Upload a DFU bin file" onclick="window.open('/upload')">
+
+<h3>List uploaded files</h3>
+
+<input type="button" value="List uploaded files" onclick="window.open('/uploaded_files')">

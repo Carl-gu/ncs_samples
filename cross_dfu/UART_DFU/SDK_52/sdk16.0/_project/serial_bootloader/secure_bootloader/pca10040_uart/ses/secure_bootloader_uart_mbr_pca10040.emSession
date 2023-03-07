@@ -1,0 +1,56 @@
+<!DOCTYPE CrossStudio_Session_File>
+<session>
+ <Bookmarks/>
+ <Breakpoints groups="Breakpoints" active_group="Breakpoints"/>
+ <ExecutionProfileWindow/>
+ <FrameBufferWindow>
+  <FrameBufferWindow bufferHeight="-1" addressSpace="" addressText="" bufferWidth="-1"/>
+ </FrameBufferWindow>
+ <Memory1/>
+ <Memory2/>
+ <Memory3/>
+ <Memory4/>
+ <Project>
+  <ProjectSessionItem path="secure_bootloader_uart_mbr_pca10040"/>
+  <ProjectSessionItem path="secure_bootloader_uart_mbr_pca10040;secure_bootloader_uart_mbr_pca10040"/>
+  <ProjectSessionItem path="secure_bootloader_uart_mbr_pca10040;secure_bootloader_uart_mbr_pca10040;Application"/>
+  <ProjectSessionItem path="secure_bootloader_uart_mbr_pca10040;secure_bootloader_uart_mbr_pca10040;nRF_Bootloader"/>
+  <ProjectSessionItem path="secure_bootloader_uart_mbr_pca10040;secure_bootloader_uart_mbr_pca10040;nRF_DFU"/>
+  <ProjectSessionItem path="secure_bootloader_uart_mbr_pca10040;secure_bootloader_uart_mbr_pca10040;nRF_Libraries"/>
+ </Project>
+ <Register1/>
+ <Register2/>
+ <Register3/>
+ <Register4/>
+ <Threads>
+  <ThreadsWindow showLists=""/>
+ </Threads>
+ <TraceWindow>
+  <Trace enabled="Yes"/>
+ </TraceWindow>
+ <Watch1>
+  <Watches active="1" update="Never"/>
+ </Watch1>
+ <Watch2>
+  <Watches active="0" update="Never"/>
+ </Watch2>
+ <Watch3>
+  <Watches active="0" update="Never"/>
+ </Watch3>
+ <Watch4>
+  <Watches active="0" update="Never"/>
+ </Watch4>
+ <Files>
+  <SessionOpenFile windowGroup="DockEditLeft" x="36" y="140" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../main.c" selected="1" top="132" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="131" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../components/libraries/bootloader/serial_dfu/nrf_dfu_serial_uart.c" selected="0" top="121" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="85" useTextEdit="1" openedFrom="C:/Nordic/SDK/16.0/components/libraries/bootloader/serial_dfu/nrf_dfu_serial_uart.c" useBinaryEdit="0" left="0" path="../../../../../components/boards/pca10040.h" selected="0" top="77" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="583" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../components/libraries/bootloader/dfu/nrf_dfu_req_handler.c" selected="0" top="566" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="52" useTextEdit="1" openedFrom="C:/Nordic/SDK/16.0/_syq/dfu/secure_bootloader/main.c" useBinaryEdit="0" left="0" path="../../../../../components/libraries/bootloader/nrf_bootloader.c" selected="0" top="41" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="180" useTextEdit="1" openedFrom="C:/Nordic/SDK/16.0/components/libraries/bootloader/serial_dfu/nrf_dfu_serial_uart.c" useBinaryEdit="0" left="0" path="../../../../../integration/nrfx/legacy/nrf_drv_uart.h" selected="0" top="167" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="85" useTextEdit="1" openedFrom="C:/Nordic/SDK/16.0/components/libraries/bootloader/serial_dfu/nrf_dfu_serial_uart.c" useBinaryEdit="0" left="0" path="../../../../../components/libraries/slip/slip.c" selected="0" top="72" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="316" useTextEdit="1" openedFrom="C:/Nordic/SDK/16.0/components/libraries/bootloader/serial_dfu/nrf_dfu_serial_uart.c" useBinaryEdit="0" left="0" path="../../../../../components/libraries/balloc/nrf_balloc.h" selected="0" top="298" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="107" useTextEdit="1" openedFrom="C:/Nordic/SDK/16.0/components/libraries/bootloader/dfu/nrf_dfu_req_handler.c" useBinaryEdit="0" left="0" path="../../../../../components/libraries/bootloader/dfu/nrf_dfu_req_handler.h" selected="0" top="101" codecName="UTF-8"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="23" y="43" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../components/libraries/crypto/backend/micro_ecc/micro_ecc_backend_ecc.h" selected="0" top="35" codecName="UTF-8"/>
+ </Files>
+ <ARMCrossStudioWindow activeProject="secure_bootloader_uart_mbr_pca10040" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Release" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="" debugSearchPath="" autoConnectCapabilities="3199"/>
+</session>
